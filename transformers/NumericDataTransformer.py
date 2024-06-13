@@ -1,17 +1,7 @@
+import numpy as np
 from pandas import DataFrame
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import MinMaxScaler, StandardScaler
-
-
-def add_energy_proportion_column(row, energy_name):
-    try:
-        if (row[f'{energy_name}(kBtu)']) < 1:
-            return 0.0
-
-        return round(float(row[f'SiteEnergyUseWN(kBtu)']) / row[f'{energy_name}(kBtu)'], 2)
-
-    except ValueError:
-        return 0.0
 
 
 class NumericDataTransformer(BaseEstimator, TransformerMixin):
@@ -23,6 +13,8 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, x, y=None):
+        start = np.count_nonzero(DataFrame(x).isnull().values)
+
         if self.data_transformation_mode == "normalization":
             x = DataFrame(MinMaxScaler().fit_transform(x, y), columns=x.columns)
 
@@ -31,18 +23,19 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
             #  Could be added in new transformation mode.
             x = DataFrame(StandardScaler().fit_transform(x, y), columns=x.columns)
 
-        if self.add_energy_proportions_data:
-            x['steam_proportion'] = x.apply(lambda row:
-                                            add_energy_proportion_column(row, 'SteamUse'),
-                                            axis=1)
-            x['natural_gas_proportion'] = x.apply(lambda row:
-                                                  add_energy_proportion_column(row, 'NaturalGas'),
-                                                  axis=1)
+        if not self.add_energy_proportions_data:
+            x.drop(columns=["StreamProportion(kBtu)", "NaturalGasProportion(kBtu)"], axis=1, inplace=True)
+
+        end = np.count_nonzero(DataFrame(x).isnull().values)
+        if end - start != 0:
+            print("numeric mismatch")
         return x
 
     def get_params(self, deep=True):
-        return {"add_energy_proportions_data": self.add_energy_proportions_data,
-                "data_transformation_mode": self.data_transformation_mode}
+        return {
+            "add_energy_proportions_data": self.add_energy_proportions_data,
+            "data_transformation_mode": self.data_transformation_mode
+        }
 
     def set_params(self, **parameters):
         self.add_energy_proportions_data = parameters["add_energy_proportions_data"]
