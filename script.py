@@ -3,17 +3,21 @@ import shutil
 import warnings
 
 import lightgbm
+import lime
+import lime.lime_tabular
 import matplotlib.pyplot as plt
 import missingno as msno
 import numpy as np
 import pandas as pd
+import shap
 import xgboost
+from mpmath import rf
 from pandas.core.frame import DataFrame
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression, Lasso, Ridge
-from sklearn.metrics import mean_squared_error
-from sklearn.model_selection import train_test_split, GridSearchCV
+from sklearn.metrics import mean_squared_error, classification_report
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold, KFold
 from sklearn.pipeline import Pipeline
 from sklearn.svm import SVR
 
@@ -32,7 +36,7 @@ ENERGY_STAR_SCORE_COLUMN = "ENERGYSTARScore"
 
 # STRUCTURAL_DATA_COLUMNS
 CONSIDERED_COLUMNS = ["BuildingType",
-                      # "PrimaryPropertyType", "Neighborhood", "LargestPropertyUseType",
+                      "PrimaryPropertyType", "Neighborhood", "LargestPropertyUseType",
                       "ZipCode", "CouncilDistrictCode", "Latitude", "Longitude", "YearBuilt",
                       "NumberofBuildings", "NumberofFloors", "PropertyGFAParking", "PropertyGFABuilding(s)",
                       "SteamUse(kBtu)", "NaturalGas(kBtu)", TARGET_COLUMN, TARGET_COLUMN2,
@@ -116,7 +120,7 @@ def prepare_data(df: DataFrame) -> DataFrame:
 
 def add_energy_proportions_columns(df):
     steam_column = df.apply(lambda row: add_energy_proportion_column(row, 'SteamUse'), axis=1)
-    df = df.assign(**{'StreamProportion(kBtu)': steam_column.values})
+    df = df.assign(**{'SteamProportion(kBtu)': steam_column.values})
 
     natural_gas_column = df.apply(lambda row: add_energy_proportion_column(row, 'NaturalGas'), axis=1)
     df = df.assign(**{'NaturalGasProportion(kBtu)': natural_gas_column.values})
@@ -165,60 +169,37 @@ def add_energy_proportion_column(row, energy_name):
         return 0.0
 
 
-def comparing_results_to_test_sets(grid_search_cv, x_test, y_test):
+def comparing_results_to_test_sets(grid_search_cv, x_test, y_test, x_train, y_train):
     final_model = grid_search_cv.best_estimator_
-    # Root Mean Squared Error: average difference between values predicted by a model and the actual values
 
     print("Evaluating test set:")
+    train_accuracy = grid_search_cv.score(x_train, y_train)
+    test_accuracy = grid_search_cv.score(x_test, y_test)
+    print(f"train_accuracy:{-train_accuracy}, test_accuracy:{-test_accuracy}")
+
     final_predictions = final_model.predict(x_test)
-    # print(classification_report(final_predictions, y_test))
     # TODO: Tu peux comparer ton y_test avec final_predictions pour voir l-ecart par valeur, voir si certaines lignes sont trop differentes.
     # Tu peux utiliser ca pour essayer de comprendre ce qui se passe et si tu veux eliminer quelques lignes.
     # Le probleme ici est ton manque de donnees, ca implique trop de variance
     final_mse = mean_squared_error(y_test, final_predictions)
+    # Root Mean Squared Error: average difference between values predicted by a model and the actual values
     final_rmse = np.sqrt(final_mse)
-    print(f"final_rmse:{final_rmse}\n")
+    print(f"Final Root Mean Squared Error:{final_rmse}\n")
 
+z
 
-if __name__ == '__main__':
-    print("Welcome to this new project!")
-    remove_last_run_plots()
-
-    dataframe: DataFrame = load_and_filter_data()
-    print("The dataset has been loaded and filtered. Let's clean the data.\n")
-
-    print(f"Dataset size before cleaning and preparation:{len(dataframe)}")
-    dataframe = prepare_data(dataframe)
-    print(f"Dataset size after cleaning and preparation:{len(dataframe)}\n")
-    # POur la prez tu peux aussi faire des bivariees avec la target, heatmap et ACP.
-
-    set_without_target_column_values = dataframe.drop(TARGET_COLUMN, axis=1)
-    target_column_values = dataframe[TARGET_COLUMN]
-
-    x_train, x_test, y_train, y_test = train_test_split(set_without_target_column_values, target_column_values,
-                                                        test_size=0.2, random_state=42)
-    print(f"training set size:{len(x_train)}, test set size:{len(x_test)}\n")
-
-    # TODO: Essaie le StratifiedValidation something, tu auras une meilleure/plus egale distribution par fold
-
-    first_pipeline = Pipeline(steps=[
-        ("string-data-transformer", StringDataTransformer()),
-        ("numeric-data-transformer", NumericDataTransformer()),
-        ("model", TransformedTargetRegressor(regressor=LinearRegression(), func=np.log1p, inverse_func=np.expm1))
-    ])
-
+def get_models_and_their_hyperparameters():
     estimators_params_grid = {
         'string-data-transformer__keep_energy_star_score': [False, True],
         'string-data-transformer__consider_string_values': [False],
-        'string-data-transformer__encoding_mode': ["OneHotEncoding"],
-        # Found input variables with inconsistent numbers of samples
+        'string-data-transformer__encoding_mode': ["None", "OneHotEncoding"],
         # 'string-data-transformer__encoding_mode': ["OneHotEncoding", "TargetEncoding"],
 
         'numeric-data-transformer__add_energy_proportions_data': [False, True],
         'numeric-data-transformer__data_transformation_mode': ["None", "normalization", "standardization"]
     }
 
-    transformer_param_grid = [
+    return [
         # {
         #     **estimators_params_grid,
         #
@@ -300,19 +281,75 @@ if __name__ == '__main__':
         #     # LightGBM's unique leaf-wise split algorithm produces simpler models that use significantly less memory
         #     # compared to XGBoost during training. XGBoost implements disk-based tree learning and in-memory prediction
         #     # for better memory management. But LightGBM has the edge for lower memory usage overall.
-        #     'model__regressor': [lightgbm.LGBMRegressor(tree_method="hist", n_estimators=300)],
+        #     'model__regressor': [lightgbm.LGBMRegressor(tree_method="hist", n_estimators=300, verbose_eval=-1,
+        #                                                 early_stopping_rounds=100)],
         #     'model__regressor__max_depth': range(2, 11)
         # },
     ]
 
-    grid_search_cv = GridSearchCV(first_pipeline, transformer_param_grid, cv=2, scoring='neg_mean_squared_error',
-                                  refit=True, n_jobs=-1)
-    grid_search_cv.fit(x_train, y_train)
 
-    print(f"Best score:{grid_search_cv.best_score_} with params:{grid_search_cv.best_params_}\n")
+def explain_with_lime():
+    categorical_features = np.argwhere(
+        np.array([len(set(x_train.data[:, x])) for x in range(x_train.data.shape[1])]) <= 10).flatten()
+    explainer = lime.lime_tabular.LimeTabularExplainer(x_train, feature_names=y_train, class_names=[TARGET_COLUMN],
+                                                       categorical_features=categorical_features, verbose=True,
+                                                       mode='regression')
+    i = 25
+    exp = explainer.explain_instance(y_train[i], rf.predict, num_features=5)
+    exp.show_in_notebook(show_table=True)
 
-    # display_all_results(grid_search_cv)
-    display_features_and_their_score(grid_search_cv, dataframe)
 
-    comparing_results_to_test_sets(grid_search_cv, x_test, y_test)
-    # Lime method et Shap method pour analyser les predictions/resultats.
+def explain_with_shap():
+    # SHAP ONLY FLOAT VALUES?
+    explainer = shap.TreeExplainer(grid_search_cv.best_estimator_._final_estimator.regressor_)
+    explanation = explainer(x_train)
+    shap_values = explanation.values
+    print(shap_values)
+
+
+if __name__ == '__main__':
+    print("Welcome to this new project!")
+    remove_last_run_plots()
+
+    dataframe: DataFrame = load_and_filter_data()
+    print("The dataset has been loaded and filtered. Let's clean the data.\n")
+
+    print(f"Dataset size before cleaning and preparation:{len(dataframe)}")
+    dataframe = prepare_data(dataframe)
+    print(f"Dataset size after cleaning and preparation:{len(dataframe)}\n")
+    # Pour la prez tu peux aussi faire des bivariees avec la target, heatmap et ACP.
+
+    set_without_target_column_values = dataframe.drop(TARGET_COLUMN, axis=1)
+    target_column_values = dataframe[TARGET_COLUMN]
+
+    x_train, x_test, y_train, y_test = train_test_split(set_without_target_column_values, target_column_values,
+                                                        test_size=0.2, random_state=42)
+    print(f"training set size:{len(x_train)}, test set size:{len(x_test)}\n")
+
+    first_pipeline = Pipeline(steps=[
+        ("string-data-transformer", StringDataTransformer()),
+        ("numeric-data-transformer", NumericDataTransformer()),
+        ("model", TransformedTargetRegressor(regressor=LinearRegression(), func=np.log1p, inverse_func=np.expm1))
+    ])
+
+    for model_parameters in get_models_and_their_hyperparameters():
+        model_name = model_parameters['model__regressor'][0].__class__.__name__
+        print(f"Evaluating now the model:{model_name}")
+
+        grid_search_cv = GridSearchCV(first_pipeline, model_parameters,
+                                      cv=KFold(5, shuffle=True), scoring='neg_mean_squared_error', refit=True,
+                                      n_jobs=-1)
+        grid_search_cv.fit(x_train, y_train)
+
+        print(f"Best score:{grid_search_cv.best_score_} with params:{grid_search_cv.best_params_}\n")
+
+        # display_all_results(grid_search_cv)
+        display_features_and_their_score(grid_search_cv, dataframe)
+
+        comparing_results_to_test_sets(grid_search_cv, x_test, y_test, x_train, y_train)
+
+        # TODO: Check https://openclassrooms.com/fr/paths/794/projects/1509/resources
+        # explain_with_lime()
+        # explain_with_shap()
+
+

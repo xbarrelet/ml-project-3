@@ -8,27 +8,31 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
     def __init__(self, add_energy_proportions_data=False, data_transformation_mode="None"):
         self.add_energy_proportions_data = add_energy_proportions_data
         self.data_transformation_mode = data_transformation_mode
+        self.min_max_scaler = MinMaxScaler()
+        self.standard_scaler = StandardScaler()
 
     def fit(self, x, y=None):
+        if self.data_transformation_mode == "normalization":
+            self.min_max_scaler.fit(x)
+
+        elif self.data_transformation_mode == "standardization":
+            self.standard_scaler.fit(x)
+
         return self
 
     def transform(self, x, y=None):
-        start = np.count_nonzero(DataFrame(x).isnull().values)
-
+        columns = x.columns
         if self.data_transformation_mode == "normalization":
-            x = DataFrame(MinMaxScaler().fit_transform(x, y), columns=x.columns)
+            x = self.min_max_scaler.transform(x)
 
         elif self.data_transformation_mode == "standardization":
-            # TODO: add with_mean and with_std parameters? Both true by default.
-            #  Could be added in new transformation mode.
-            x = DataFrame(StandardScaler().fit_transform(x, y), columns=x.columns)
+            x = self.standard_scaler.transform(x)
+
+        x = DataFrame(x, columns=columns)
 
         if not self.add_energy_proportions_data:
-            x.drop(columns=["StreamProportion(kBtu)", "NaturalGasProportion(kBtu)"], axis=1, inplace=True)
+            x.drop(columns=["SteamProportion(kBtu)", "NaturalGasProportion(kBtu)"], axis=1, inplace=True)
 
-        end = np.count_nonzero(DataFrame(x).isnull().values)
-        if end - start != 0:
-            print("numeric mismatch")
         return x
 
     def get_params(self, deep=True):
