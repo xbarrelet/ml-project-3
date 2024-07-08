@@ -31,7 +31,7 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
         x = DataFrame(x, columns=columns)
 
         if not self.add_energy_proportions_data:
-            x.drop(columns=["SteamProportion(kBtu)", "NaturalGasProportion(kBtu)"], axis=1, inplace=True)
+            x.drop(columns=["SteamProportion", "NaturalGasProportion"], axis=1, inplace=True)
 
         return x
 

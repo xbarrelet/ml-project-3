@@ -17,17 +17,14 @@ TARGET_COLUMN2 = "SiteEnergyUseWN(kBtu)"
 ENERGY_STAR_SCORE_COLUMN = "ENERGYSTARScore"
 
 # STRUCTURAL_DATA_COLUMNS
-CONSIDERED_COLUMNS = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "LargestPropertyUseType", "PropertyName",
-                      "ZipCode", "CouncilDistrictCode", "Latitude", "Longitude", "YearBuilt",
-                      "NumberofBuildings", "NumberofFloors", "PropertyGFAParking", "PropertyGFABuilding(s)",
-                      "SteamUse(kBtu)", "NaturalGas(kBtu)", TARGET_COLUMN, TARGET_COLUMN2,
-                      ENERGY_STAR_SCORE_COLUMN]
+CONSIDERED_COLUMNS = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "ZipCode", "CouncilDistrictCode",
+                      "ComplianceStatus", "Latitude", "Longitude", "YearBuilt", "NumberofBuildings", "NumberofFloors",
+                      "PropertyGFABuilding(s)", "SteamUse(kBtu)", "PropertyName", "NaturalGas(kBtu)", TARGET_COLUMN,
+                      TARGET_COLUMN2, ENERGY_STAR_SCORE_COLUMN]
 
-STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "LargestPropertyUseType", "PropertyName"]
-COLUMNS_WITH_OUTLIERS = [TARGET_COLUMN, "NaturalGas(kBtu)", "NumberofBuildings", "NumberofFloors", "SteamUse(kBtu)"]
-INTERESTING_COLUMNS_FOR_ACP = ['NumberofFloors', 'PropertyGFAParking', 'PropertyGFABuilding(s)', 'NaturalGas(kBtu)',
-                              'GHGEmissionsIntensity', 'SiteEnergyUseWN(kBtu)', 'ENERGYSTARScore']
-
+STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "PropertyName"]
+INTERESTING_COLUMNS_FOR_ACP = ['NumberofFloors', 'PropertyGFABuilding(s)', 'NaturalGas(kBtu)', 'GHGEmissionsIntensity',
+                               'SiteEnergyUseWN(kBtu)', 'ENERGYSTARScore', "SteamUse(kBtu)"]
 DETAILED_OUTPUT_MODE = False
 
 # PANDAS CONFIG
@@ -37,7 +34,9 @@ pd.set_option('display.max_rows', None)
 
 def remove_last_run_analysis_plots():
     shutil.rmtree('analysis_plots', ignore_errors=True)
+
     os.mkdir('analysis_plots')
+    os.mkdir('analysis_plots/univariate_analysis')
 
 
 def save_plot(plot, filename: str, prefix: str) -> None:
@@ -69,7 +68,7 @@ def load_and_filter_data() -> DataFrame:
     return df[CONSIDERED_COLUMNS]
 
 
-def display_information_missing_values_and_produces_plot(df: DataFrame, filename: str) -> None:
+def save_missing_values_plot(df: DataFrame, filename: str) -> None:
     # present_data_percentages = df.notna().mean().sort_values(ascending=False)
     #
     # print("Listing present data percentages for each column:")
@@ -81,6 +80,14 @@ def display_information_missing_values_and_produces_plot(df: DataFrame, filename
 
 
 def clean_dataset(df: DataFrame) -> DataFrame:
+    df = df.drop(df[df['NumberofBuildings'] == 0].index)
+    df = df.drop(df[(df['NumberofFloors'] == 0) | (df['NumberofFloors'] > 80)].index)
+    df = df.drop(df[df["SiteEnergyUseWN(kBtu)"] == 0].index)
+    df = df.drop(df[df["GHGEmissionsIntensity"] == 0].index)
+
+    df = df.drop(df[df["ComplianceStatus"] != "Compliant"].index)
+    df = df.drop(columns=["ComplianceStatus"], axis=1)
+
     return df.dropna()
 
 
@@ -99,17 +106,17 @@ def fill_missing_values_for_energy_star_score(df):
 
 def prepare_data(df: DataFrame) -> DataFrame:
     # print(df.info())
-    df = fill_missing_values_for_energy_star_score(df)
-    display_information_missing_values_and_produces_plot(df, "missing_values_after_loading")
-    df = clean_dataset(df)
-    display_information_missing_values_and_produces_plot(df, "missing_values_after_cleaning")
+    save_missing_values_plot(df, "missing_values_after_loading")
 
+    df = clean_dataset(df)
     df = add_energy_proportions_columns(df)
     df = clean_non_habitation_buildings(df)
 
-    for column in COLUMNS_WITH_OUTLIERS:
-        outliers_dataframe = get_the_outliers_values(column, df, percentage_defining_outliers=0.01)
-        df = df.drop(outliers_dataframe.index)
+    if DETAILED_OUTPUT_MODE:
+        for column in [col for col in df.columns if col not in ["PropertyName"] + STRING_COLUMNS_NAMES]:
+            display_the_outliers_values(column, df, percentage_defining_outliers=0.1)
+
+    save_missing_values_plot(df, "missing_values_after_cleaning")
 
     return df
 
@@ -119,7 +126,7 @@ def add_energy_proportion_column(row, energy_name):
         if row[f'{energy_name}(kBtu)'] < 1:
             return 0.0
 
-        return round(float(row[f'SiteEnergyUseWN(kBtu)']) / row[f'{energy_name}(kBtu)'], 2)
+        return round(float(row[f'{energy_name}(kBtu)'] / row[f'SiteEnergyUseWN(kBtu)']), 2)
 
     except ValueError:
         return 0.0
@@ -127,26 +134,24 @@ def add_energy_proportion_column(row, energy_name):
 
 def add_energy_proportions_columns(df):
     steam_column = df.apply(lambda row: add_energy_proportion_column(row, 'SteamUse'), axis=1)
-    df = df.assign(**{'SteamProportion(kBtu)': steam_column.values})
+    df = df.assign(**{'SteamProportion': steam_column.values})
 
     natural_gas_column = df.apply(lambda row: add_energy_proportion_column(row, 'NaturalGas'), axis=1)
-    df = df.assign(**{'NaturalGasProportion(kBtu)': natural_gas_column.values})
+    df = df.assign(**{'NaturalGasProportion': natural_gas_column.values})
 
     return df
 
 
-def get_the_outliers_values(column_name: str, df: DataFrame,
-                            percentage_defining_outliers: float = 0.25) -> DataFrame:
+def display_the_outliers_values(column_name: str, df: DataFrame,
+                                percentage_defining_outliers: float = 0.25) -> DataFrame:
     filtered_dataframe = df[df[column_name].notna()]
     filtered_dataframe = filtered_dataframe[column_name]
 
     outliers_values = extract_outliers_values(filtered_dataframe, percentage_defining_outliers)
-    outliers_dataframe = df[df[column_name].isin(outliers_values)].sort_values(by=column_name,
-                                                                               ascending=False)
-    if DETAILED_OUTPUT_MODE:
-        print(f"Here are the outliers in the column:{column_name}\n")
-        print(outliers_dataframe[['PropertyName', column_name]])
-        print("\n")
+    outliers_dataframe = df[df[column_name].isin(outliers_values)].sort_values(by=column_name, ascending=False)
+    print(f"Here are the outliers in the column:{column_name}\n")
+    print(outliers_dataframe[['PropertyName', column_name]])
+    print("\n")
 
     return outliers_dataframe
 
@@ -161,21 +166,58 @@ def extract_outliers_values(filtered_dataframe: DataFrame, percentage_defining_o
     return filtered_dataframe[mask]
 
 
-def save_univariate_analysis_plot(df: DataFrame, plot_types: list[str] = ['boxplot'],
-                                  prefix: str = "univariate_analysis") -> None:
+def save_univariate_analysis_plot(df: DataFrame, prefix: str = "univariate_analysis") -> None:
     for column_name in df.columns:
         if column_name not in STRING_COLUMNS_NAMES:
-            if "boxplot" in plot_types:
-                boxplot = sns.boxplot(data=df, x=column_name, showmeans=True)
-                boxplot.set_title(f"Boxplot of {column_name}".replace("_", " "))
-                save_plot(boxplot, f"{column_name}_boxplot", prefix)
+            boxplot = sns.boxplot(data=df, x=column_name, showmeans=True, showfliers=False)
+            boxplot.set_title(f"Boxplot of {column_name}".replace("_", " "))
+            save_plot(boxplot, f"{column_name}_boxplot", prefix)
 
-            if "histogram" in plot_types:
+            plt.figure(figsize=(7, 5))
+            histogram = sns.histplot(data=df, x=column_name, kde=False)
+            histogram.set_title(f"Histogram of {column_name}".replace("_", " "))
+            plt.axvline(x=df[column_name].median(), linewidth=3, color='y', label="median", alpha=0.5)
+            save_plot(histogram, f"{column_name}_histogram", prefix)
+
+            if column_name not in ["Latitude", "Longitude"]:
+                log_column = f"log_{column_name}"
+                df[log_column] = np.log1p(df[column_name])
+
+                log_boxplot = sns.boxplot(data=df, x=log_column, showmeans=True, showfliers=False)
+                log_boxplot.set_title(f"Boxplot of log {column_name}".replace("_", " "))
+                save_plot(log_boxplot, f"{column_name}_log_boxplot", prefix)
+
                 plt.figure(figsize=(7, 5))
-                histogram = sns.histplot(data=df, x=column_name, kde=False)
-                histogram.set_title(f"Histogram of {column_name}".replace("_", " "))
-                plt.axvline(x=df[column_name].median(), linewidth=3, color='y', label="median", alpha=0.5)
-                save_plot(histogram, f"{column_name}_histogram", prefix)
+                histogram = sns.histplot(data=df, x=log_column, kde=False)
+                histogram.set_title(f"Histogram of log {column_name}".replace("_", " "))
+                plt.axvline(x=df[log_column].median(), linewidth=3, color='y', label="median", alpha=0.5)
+                save_plot(histogram, f"{column_name}_log_histogram", prefix)
+
+        elif column_name != "PropertyName":
+            unique_values = df[column_name].unique()
+            data = []
+            labels = []
+            others_count = 0
+
+            for value in unique_values:
+                values_count = df[column_name].value_counts()[value]
+                if values_count < 20:
+                    others_count += values_count
+                else:
+                    data.append(values_count)
+                    labels.append(value)
+
+            data.append(others_count)
+            labels.append("Others")
+
+            colors = sns.color_palette('pastel')[0:5]
+            plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
+            plt.title(f'Pie plot of column {column_name}, number of unique values: {len(unique_values)}')
+            plt.savefig(f"analysis_plots/univariate_analysis/pieplot_{column_name}")
+            plt.close()
+
+    log_columns = [col for col in df.columns if col.startswith("log_")]
+    df.drop(columns=log_columns, inplace=True)
 
 
 def perform_bivariate_analysis(df: DataFrame, target_column: str):
@@ -187,9 +229,8 @@ def perform_bivariate_analysis(df: DataFrame, target_column: str):
         x_ticker = ticker.LinearLocator(6)
 
     for column_name in df.columns:
-        # TODO: What can I do for the String columns?
         if column_name not in STRING_COLUMNS_NAMES and column_name != target_column:
-            boxplot = sns.boxplot(data=df, x=df[target_column], y=column_name)
+            boxplot = sns.boxplot(data=df, x=df[target_column], y=column_name, showfliers=False)
             boxplot.set_title(f"Bivariate analysis of {column_name}")
             boxplot.xaxis.set_major_locator(x_ticker)
             save_plot(boxplot, f"{column_name}_boxplot", plot_prefix_path)
@@ -198,10 +239,6 @@ def perform_bivariate_analysis(df: DataFrame, target_column: str):
             stripplot.xaxis.set_major_locator(x_ticker)
             save_plot(stripplot, f"{column_name}_stripplot", plot_prefix_path)
 
-            violin_plot = sns.violinplot(data=df, x=df[target_column], y=column_name)
-            violin_plot.xaxis.set_major_locator(x_ticker)
-            save_plot(violin_plot, f"{column_name}_violinplot", plot_prefix_path)
-
     create_heatmap(df, plot_prefix_path)
 
 
@@ -209,7 +246,7 @@ def create_heatmap(df: DataFrame, plot_prefix_path: str):
     quantitative_df = df.drop(columns=STRING_COLUMNS_NAMES)
     matrix = quantitative_df.corr().round(2)
 
-    plt.subplots(figsize=(13, 11))
+    plt.subplots(figsize=(15, 15))
     cmap = sns.diverging_palette(230, 20, as_cmap=True)
 
     # To only display the lower half of the matrix
@@ -307,7 +344,8 @@ if __name__ == '__main__':
     print(f"Dataset size after cleaning and preparation:{len(dataframe)}\n")
 
     print("Starting univariate analysis")
-    save_univariate_analysis_plot(dataframe, plot_types=['boxplot', 'histogram'], prefix="univariate_analysis")
+    save_univariate_analysis_plot(dataframe, prefix="univariate_analysis")
+
     print("Starting ACP analysis")
     perform_acp_analysis(dataframe)
 
