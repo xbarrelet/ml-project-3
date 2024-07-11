@@ -5,9 +5,10 @@ from sklearn.preprocessing import MinMaxScaler, StandardScaler
 
 
 class NumericDataTransformer(BaseEstimator, TransformerMixin):
-    def __init__(self, add_energy_proportions_data=False, data_transformation_mode="None"):
+    def __init__(self, add_energy_proportions_data=False, data_transformation_mode="None", use_log_values=False):
         self.add_energy_proportions_data = add_energy_proportions_data
         self.data_transformation_mode = data_transformation_mode
+        self.use_log_values = use_log_values
         self.min_max_scaler = MinMaxScaler()
         self.standard_scaler = StandardScaler()
 
@@ -30,6 +31,12 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
 
         x = DataFrame(x, columns=columns)
 
+        if self.use_log_values:
+            # x = x.apply(lambda x: np.log1p(x))
+            for column in columns:
+                x[column] = np.log1p(x[column]) \
+                    if np.issubdtype(x[column].dtype, np.number) and x[column].min() > 0 else x[column]
+
         if not self.add_energy_proportions_data:
             x.drop(columns=["SteamProportion", "NaturalGasProportion"], axis=1, inplace=True)
 
@@ -38,10 +45,12 @@ class NumericDataTransformer(BaseEstimator, TransformerMixin):
     def get_params(self, deep=True):
         return {
             "add_energy_proportions_data": self.add_energy_proportions_data,
-            "data_transformation_mode": self.data_transformation_mode
+            "data_transformation_mode": self.data_transformation_mode,
+            "use_log_values": self.use_log_values
         }
 
     def set_params(self, **parameters):
         self.add_energy_proportions_data = parameters["add_energy_proportions_data"]
         self.data_transformation_mode = parameters["data_transformation_mode"]
+        self.use_log_values = parameters["use_log_values"]
         return self

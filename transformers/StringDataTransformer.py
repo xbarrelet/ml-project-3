@@ -4,7 +4,6 @@ from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder, TargetEncoder
 
 STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood"]
-ENERGY_STAR_SCORE_COLUMN = "ENERGYSTARScore"
 
 pd.set_option('display.max_rows', None)
 pd.set_option('display.max_columns', None)
@@ -32,9 +31,6 @@ class StringDataTransformer(BaseEstimator, TransformerMixin):
     def fit(self, x, y=None):
         x = DataFrame(x, columns=x.columns)
 
-        if 'ENERGY_STAR_SCORE_COLUMN' in x and not self.keep_energy_star_score:
-            x.drop(columns=[ENERGY_STAR_SCORE_COLUMN], axis=1, inplace=True)
-
         if self.encoding_mode == "OneHotEncoding":
             self.ohe.fit(x[STRING_COLUMNS_NAMES])
 
@@ -44,9 +40,6 @@ class StringDataTransformer(BaseEstimator, TransformerMixin):
         return self
 
     def transform(self, x, y=None):
-        if 'ENERGY_STAR_SCORE_COLUMN' in x and not self.keep_energy_star_score:
-            x.drop(columns=[ENERGY_STAR_SCORE_COLUMN], axis=1, inplace=True)
-
         if not self.consider_string_values:
             return x.drop(columns=STRING_COLUMNS_NAMES, axis=1)
 
@@ -61,12 +54,10 @@ class StringDataTransformer(BaseEstimator, TransformerMixin):
     def get_params(self, deep=True):
         return {
             "consider_string_values": self.consider_string_values,
-            "encoding_mode": self.encoding_mode,
-            "keep_energy_star_score": self.keep_energy_star_score
+            "encoding_mode": self.encoding_mode
         }
 
     def set_params(self, **parameters):
         self.consider_string_values = parameters["consider_string_values"]
         self.encoding_mode = parameters["encoding_mode"]
-        self.keep_energy_star_score = parameters["keep_energy_star_score"]
         return self

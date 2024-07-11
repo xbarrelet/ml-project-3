@@ -12,19 +12,18 @@ from sklearn.preprocessing import StandardScaler
 
 DATA_FILEPATH = "resources/2016_Building_Energy_Benchmarking.csv"
 
-TARGET_COLUMN = "GHGEmissionsIntensity"
-TARGET_COLUMN2 = "SiteEnergyUseWN(kBtu)"
-ENERGY_STAR_SCORE_COLUMN = "ENERGYSTARScore"
+TARGET_COLUMN = "SiteEUIWN(kBtu/sf)"
+TARGET_COLUMN2 = "GHGEmissionsIntensity"
 
 # STRUCTURAL_DATA_COLUMNS
 CONSIDERED_COLUMNS = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "ZipCode", "CouncilDistrictCode",
                       "ComplianceStatus", "Latitude", "Longitude", "YearBuilt", "NumberofBuildings", "NumberofFloors",
-                      "PropertyGFABuilding(s)", "SteamUse(kBtu)", "PropertyName", "NaturalGas(kBtu)", TARGET_COLUMN,
-                      TARGET_COLUMN2, ENERGY_STAR_SCORE_COLUMN]
+                      "PropertyGFABuilding(s)", "SteamUse(kBtu)", "NaturalGas(kBtu)", "SiteEnergyUseWN(kBtu)",
+                      TARGET_COLUMN, TARGET_COLUMN2]
 
-STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "PropertyName"]
-INTERESTING_COLUMNS_FOR_ACP = ['NumberofFloors', 'PropertyGFABuilding(s)', 'NaturalGas(kBtu)', 'GHGEmissionsIntensity',
-                               'SiteEnergyUseWN(kBtu)', 'ENERGYSTARScore', "SteamUse(kBtu)"]
+STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood"]
+INTERESTING_COLUMNS_FOR_ACP = ['NumberofFloors', 'PropertyGFABuilding(s)', 'NaturalGas(kBtu)', TARGET_COLUMN2,
+                               TARGET_COLUMN, "SteamUse(kBtu)"]
 DETAILED_OUTPUT_MODE = False
 
 # PANDAS CONFIG
@@ -34,16 +33,15 @@ pd.set_option('display.max_rows', None)
 
 def remove_last_run_analysis_plots():
     shutil.rmtree('analysis_plots', ignore_errors=True)
-
     os.mkdir('analysis_plots')
-    os.mkdir('analysis_plots/univariate_analysis')
 
 
-def save_plot(plot, filename: str, prefix: str) -> None:
+def display_plot(plot, filename: str, prefix: str) -> None:
     os.makedirs(f"analysis_plots/{prefix}", exist_ok=True)
 
     fig = plot.get_figure()
-    fig.savefig(f"analysis_plots/{prefix}/{filename}.png")
+    # fig.savefig(f"analysis_plots/{prefix}/{filename}.png")
+    plt.show()
     plt.close()
 
 
@@ -68,22 +66,22 @@ def load_and_filter_data() -> DataFrame:
     return df[CONSIDERED_COLUMNS]
 
 
-def save_missing_values_plot(df: DataFrame, filename: str) -> None:
+def display_missing_values_plot(df: DataFrame, filename: str) -> None:
     # present_data_percentages = df.notna().mean().sort_values(ascending=False)
     #
     # print("Listing present data percentages for each column:")
     # print(present_data_percentages)
     # print("\n")
-
+    print("Showing now missing values plot:\n")
     plot = msno.bar(df, figsize=(15, 18))
-    save_plot(plot, filename, "missing_values")
+    display_plot(plot, filename, "missing_values")
 
 
 def clean_dataset(df: DataFrame) -> DataFrame:
     df = df.drop(df[df['NumberofBuildings'] == 0].index)
     df = df.drop(df[(df['NumberofFloors'] == 0) | (df['NumberofFloors'] > 80)].index)
-    df = df.drop(df[df["SiteEnergyUseWN(kBtu)"] == 0].index)
-    df = df.drop(df[df["GHGEmissionsIntensity"] == 0].index)
+    df = df.drop(df[df[TARGET_COLUMN] == 0].index)
+    df = df.drop(df[df[TARGET_COLUMN2] == 0].index)
 
     df = df.drop(df[df["ComplianceStatus"] != "Compliant"].index)
     df = df.drop(columns=["ComplianceStatus"], axis=1)
@@ -98,15 +96,9 @@ def clean_non_habitation_buildings(df):
     return non_residential_buildings_df
 
 
-def fill_missing_values_for_energy_star_score(df):
-    df.fillna({ENERGY_STAR_SCORE_COLUMN: -1}, inplace=True)
-    df[ENERGY_STAR_SCORE_COLUMN] = df[ENERGY_STAR_SCORE_COLUMN].replace("NULL", -1)
-    return df
-
-
 def prepare_data(df: DataFrame) -> DataFrame:
     # print(df.info())
-    save_missing_values_plot(df, "missing_values_after_loading")
+    display_missing_values_plot(df, "missing_values_after_loading")
 
     df = clean_dataset(df)
     df = add_energy_proportions_columns(df)
@@ -116,7 +108,7 @@ def prepare_data(df: DataFrame) -> DataFrame:
         for column in [col for col in df.columns if col not in ["PropertyName"] + STRING_COLUMNS_NAMES]:
             display_the_outliers_values(column, df, percentage_defining_outliers=0.1)
 
-    save_missing_values_plot(df, "missing_values_after_cleaning")
+    display_missing_values_plot(df, "missing_values_after_cleaning")
 
     return df
 
@@ -138,6 +130,9 @@ def add_energy_proportions_columns(df):
 
     natural_gas_column = df.apply(lambda row: add_energy_proportion_column(row, 'NaturalGas'), axis=1)
     df = df.assign(**{'NaturalGasProportion': natural_gas_column.values})
+
+    if TARGET_COLUMN != "SiteEnergyUseWN(kBtu)" or TARGET_COLUMN2 != "SiteEnergyUseWN(kBtu)":
+        df.drop(columns=["SiteEnergyUseWN(kBtu)"], axis=1, inplace=True)
 
     return df
 
@@ -166,18 +161,20 @@ def extract_outliers_values(filtered_dataframe: DataFrame, percentage_defining_o
     return filtered_dataframe[mask]
 
 
-def save_univariate_analysis_plot(df: DataFrame, prefix: str = "univariate_analysis") -> None:
+def perform_univariate_analysis(df: DataFrame, prefix: str = "univariate_analysis") -> None:
+    os.mkdir('analysis_plots/univariate_analysis')
+
     for column_name in df.columns:
         if column_name not in STRING_COLUMNS_NAMES:
             boxplot = sns.boxplot(data=df, x=column_name, showmeans=True, showfliers=False)
             boxplot.set_title(f"Boxplot of {column_name}".replace("_", " "))
-            save_plot(boxplot, f"{column_name}_boxplot", prefix)
+            display_plot(boxplot, f"{column_name}_boxplot", prefix)
 
             plt.figure(figsize=(7, 5))
             histogram = sns.histplot(data=df, x=column_name, kde=False)
             histogram.set_title(f"Histogram of {column_name}".replace("_", " "))
             plt.axvline(x=df[column_name].median(), linewidth=3, color='y', label="median", alpha=0.5)
-            save_plot(histogram, f"{column_name}_histogram", prefix)
+            display_plot(histogram, f"{column_name}_histogram", prefix)
 
             if column_name not in ["Latitude", "Longitude"]:
                 log_column = f"log_{column_name}"
@@ -185,13 +182,13 @@ def save_univariate_analysis_plot(df: DataFrame, prefix: str = "univariate_analy
 
                 log_boxplot = sns.boxplot(data=df, x=log_column, showmeans=True, showfliers=False)
                 log_boxplot.set_title(f"Boxplot of log {column_name}".replace("_", " "))
-                save_plot(log_boxplot, f"{column_name}_log_boxplot", prefix)
+                display_plot(log_boxplot, f"{column_name}_log_boxplot", prefix)
 
                 plt.figure(figsize=(7, 5))
                 histogram = sns.histplot(data=df, x=log_column, kde=False)
                 histogram.set_title(f"Histogram of log {column_name}".replace("_", " "))
                 plt.axvline(x=df[log_column].median(), linewidth=3, color='y', label="median", alpha=0.5)
-                save_plot(histogram, f"{column_name}_log_histogram", prefix)
+                display_plot(histogram, f"{column_name}_log_histogram", prefix)
 
         elif column_name != "PropertyName":
             unique_values = df[column_name].unique()
@@ -213,7 +210,8 @@ def save_univariate_analysis_plot(df: DataFrame, prefix: str = "univariate_analy
             colors = sns.color_palette('pastel')[0:5]
             plt.pie(data, labels=labels, colors=colors, autopct='%.0f%%')
             plt.title(f'Pie plot of column {column_name}, number of unique values: {len(unique_values)}')
-            plt.savefig(f"analysis_plots/univariate_analysis/pieplot_{column_name}")
+            # plt.savefig(f"analysis_plots/univariate_analysis/pieplot_{column_name}")
+            plt.show()
             plt.close()
 
     log_columns = [col for col in df.columns if col.startswith("log_")]
@@ -222,22 +220,18 @@ def save_univariate_analysis_plot(df: DataFrame, prefix: str = "univariate_analy
 
 def perform_bivariate_analysis(df: DataFrame, target_column: str):
     plot_prefix_path = f"bivariate_analysis_{target_column.split("(")[0]}"
-
-    if target_column == TARGET_COLUMN:
-        x_ticker = ticker.LinearLocator(10)
-    else:
-        x_ticker = ticker.LinearLocator(6)
+    x_ticker = ticker.LinearLocator(6)
 
     for column_name in df.columns:
         if column_name not in STRING_COLUMNS_NAMES and column_name != target_column:
             boxplot = sns.boxplot(data=df, x=df[target_column], y=column_name, showfliers=False)
             boxplot.set_title(f"Bivariate analysis of {column_name}")
             boxplot.xaxis.set_major_locator(x_ticker)
-            save_plot(boxplot, f"{column_name}_boxplot", plot_prefix_path)
+            display_plot(boxplot, f"{column_name}_boxplot", plot_prefix_path)
 
             stripplot = sns.stripplot(data=df, x=target_column, y=column_name)
             stripplot.xaxis.set_major_locator(x_ticker)
-            save_plot(stripplot, f"{column_name}_stripplot", plot_prefix_path)
+            display_plot(stripplot, f"{column_name}_stripplot", plot_prefix_path)
 
     create_heatmap(df, plot_prefix_path)
 
@@ -254,7 +248,7 @@ def create_heatmap(df: DataFrame, plot_prefix_path: str):
     heatmap = sns.heatmap(matrix, cmap=cmap, mask=mask, square=True, linewidths=.5, cbar_kws={"shrink": .5})
 
     # heatmap = sns.heatmap(matrix, cmap=cmap, square=True, linewidths=.5, cbar_kws={"shrink": .5})
-    save_plot(heatmap, f"heatmap", plot_prefix_path)
+    display_plot(heatmap, f"heatmap", plot_prefix_path)
 
 
 def perform_acp_analysis(df: DataFrame):
@@ -283,7 +277,6 @@ def perform_acp_analysis(df: DataFrame):
 
     create_correlation_circle_plot(features, (0, 1), pca, plots_prefix_path)
     create_correlation_circle_plot(features, (2, 3), pca, plots_prefix_path)
-    create_correlation_circle_plot(features, (4, 5), pca, plots_prefix_path)
 
 
 def create_correlation_circle_plot(features, x_y, pca, plots_prefix_path):
@@ -313,7 +306,8 @@ def create_correlation_circle_plot(features, x_y, pca, plots_prefix_path):
     plt.plot(np.cos(an), np.sin(an))  # Add a unit circle for scale
     plt.axis('equal')
 
-    plt.savefig(f"analysis_plots/{plots_prefix_path}/Correlations_circle_F{x + 1}_F{y + 1}.png")
+    # plt.savefig(f"analysis_plots/{plots_prefix_path}/Correlations_circle_F{x + 1}_F{y + 1}.png")
+    plt.show()
     plt.close()
 
 
@@ -328,29 +322,30 @@ def create_inertia_plot(pca, x_list, plots_prefix_path):
     plt.ylabel("pourcentage d'inertie")
     plt.title("Eboulis des valeurs propres")
 
-    plt.savefig(f"analysis_plots/{plots_prefix_path}/eboulis_des_valeurs_propres.png")
+    # plt.savefig(f"analysis_plots/{plots_prefix_path}/eboulis_des_valeurs_propres.png")
+    plt.show()
     plt.close()
 
 
 if __name__ == '__main__':
-    print("Welcome to this new project!")
-    remove_last_run_analysis_plots()
+    print("Starting the explanatory script.\n")
+    # remove_last_run_analysis_plots()
 
     dataframe: DataFrame = load_and_filter_data()
     print("The dataset has been loaded and filtered. Let's clean the data.\n")
 
-    print(f"Dataset size before cleaning and preparation:{len(dataframe)}")
+    print(f"Dataset size before cleaning and preparation:{len(dataframe)}\n")
     dataframe = prepare_data(dataframe)
     print(f"Dataset size after cleaning and preparation:{len(dataframe)}\n")
 
-    print("Starting univariate analysis")
-    save_univariate_analysis_plot(dataframe, prefix="univariate_analysis")
+    print("Starting univariate analysis.\n")
+    perform_univariate_analysis(dataframe, prefix="univariate_analysis")
 
-    print("Starting ACP analysis")
+    print("Starting ACP analysis.\n")
     perform_acp_analysis(dataframe)
 
     for target_column in [TARGET_COLUMN, TARGET_COLUMN2]:
-        print("Starting bivariate analysis for the target column:", target_column)
+        print(f"Starting bivariate analysis for the target column:{target_column}\n", )
         perform_bivariate_analysis(dataframe, target_column)
 
     print("All analysis have been performed.")
