@@ -3,24 +3,10 @@ from pandas import DataFrame
 from sklearn.base import BaseEstimator, TransformerMixin
 from sklearn.preprocessing import OneHotEncoder, TargetEncoder
 
-STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood"]
-
-pd.set_option('display.max_rows', None)
-pd.set_option('display.max_columns', None)
-
-
-def transform_data(x, transformer):
-    transformed_x = transformer.transform(x[STRING_COLUMNS_NAMES])
-    transformed_x_df = DataFrame(transformed_x, columns=transformer.get_feature_names_out(STRING_COLUMNS_NAMES))
-    transformed_x_df.index = x.index
-
-    encoded_df = pd.concat([x, transformed_x_df], axis=1)
-    x = encoded_df.drop(STRING_COLUMNS_NAMES, axis=1)
-
-    return x
-
 
 class StringDataTransformer(BaseEstimator, TransformerMixin):
+    STRING_COLUMNS_NAMES = ["BuildingType", "PrimaryPropertyType", "Neighborhood"]
+
     def __init__(self, consider_string_values=False, encoding_mode="None", keep_energy_star_score=False):
         self.consider_string_values = consider_string_values
         self.encoding_mode = encoding_mode
@@ -32,22 +18,32 @@ class StringDataTransformer(BaseEstimator, TransformerMixin):
         x = DataFrame(x, columns=x.columns)
 
         if self.encoding_mode == "OneHotEncoding":
-            self.ohe.fit(x[STRING_COLUMNS_NAMES])
+            self.ohe.fit(x[self.STRING_COLUMNS_NAMES])
 
         if self.encoding_mode == "TargetEncoding":
-            self.te.fit(x[STRING_COLUMNS_NAMES], y)
+            self.te.fit(x[self.STRING_COLUMNS_NAMES], y)
 
         return self
 
+    def transform_data(self, x, transformer):
+        transformed_x = transformer.transform(x[self.STRING_COLUMNS_NAMES])
+        transformed_x_df = DataFrame(transformed_x, columns=transformer.get_feature_names_out(self.STRING_COLUMNS_NAMES))
+        transformed_x_df.index = x.index
+
+        encoded_df = pd.concat([x, transformed_x_df], axis=1)
+        x = encoded_df.drop(self.STRING_COLUMNS_NAMES, axis=1)
+
+        return x
+
     def transform(self, x, y=None):
         if not self.consider_string_values:
-            return x.drop(columns=STRING_COLUMNS_NAMES, axis=1)
+            return x.drop(columns=self.STRING_COLUMNS_NAMES, axis=1)
 
         if self.encoding_mode == "OneHotEncoding":
-            x = transform_data(x, self.ohe)
+            x = self.transform_data(x, self.ohe)
 
         if self.encoding_mode == "TargetEncoding":
-            x = transform_data(x, self.te)
+            x = self.transform_data(x, self.te)
 
         return x
 

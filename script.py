@@ -25,10 +25,8 @@ warnings.filterwarnings("ignore", category=LinAlgWarning, module='sklearn')
 
 DATA_FILEPATH = "resources/2016_Building_Energy_Benchmarking.csv"
 
-TARGET_COLUMN = "GHGEmissionsIntensity"
-# TARGET_COLUMN = "TotalGHGEmissions"
-# TARGET_COLUMN = "SiteEnergyUseWN(kBtu)"
-# TARGET_COLUMN = "SiteEUIWN(kBtu/sf)"
+# TARGET_COLUMN = "GHGEmissionsIntensity"
+TARGET_COLUMN = "SiteEUIWN(kBtu/sf)"
 ENERGY_STAR_SCORE_COLUMN = "ENERGYSTARScore"
 
 CONSIDERED_COLUMNS = ["BuildingType", "PrimaryPropertyType", "Neighborhood", "ZipCode", "CouncilDistrictCode",
@@ -77,6 +75,8 @@ def clean_dataset(df: DataFrame) -> DataFrame:
     df = df.drop(df[df["ComplianceStatus"] != "Compliant"].index)
     df = df.drop(columns=["ComplianceStatus"], axis=1)
 
+    df['Neighborhood'] = df['Neighborhood'].str.upper()
+
     return df.dropna()
 
 
@@ -115,7 +115,7 @@ def create_feature_importance_plots(model, keys, model_name):
         sns.set_theme(rc={'figure.figsize': (17, 12)})
         feature_importances = model.feature_importances_
 
-        for result in sorted(zip(feature_importances, CONSIDERED_COLUMNS), reverse=True):
+        for result in sorted(zip(feature_importances, keys), reverse=True):
             score = result[0]
             if score > 0.01:
                 features.append({"name": result[1], "score": score})
