@@ -176,66 +176,66 @@ def get_models_and_their_hyperparameters():
     }
 
     return [
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # The Least Absolute Shrinkage and Selection Operator is abbreviated as “LASSO.” Lasso regression is a type
-        #     # of regularisation. It is preferred over regression methods for more precise prediction. This model makes
-        #     # use of shrinkage which is the process by which data values are shrunk towards a central point known as
-        #     # the mean. L1 regularisation is used in Lasso Regression. It is used when there are many features because
-        #     # it performs feature selection automatically. The main purpose of Lasso Regression is to find the
-        #     # coefficients that minimize the error sum of squares by applying a penalty to these coefficients.
-        #     'model': [Lasso()],
-        #     # 'model__alpha': [0.2],
-        #     'model__alpha': np.arange(0.01, 1.0, 0.01),
-        # },
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # Similar to the LASSO regression, ridge regression puts a similar constraint on the coefficients by
-        #     # introducing a penalty factor. However, while lasso regression takes the magnitude of the coefficients,
-        #     # ridge regression takes the square.
-        #     'model': [Ridge()],
-        #     'model__alpha': np.arange(1, 100.0, 1),
-        # },
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # The elastic net is a regularized regression method that linearly combines the L1 and L2 penalties
-        #     # of the lasso and ridge methods.
-        #     'model': [ElasticNet()],
-        #     'model__alpha': [1e-2, 1e-1, 1.0, 10.0],
-        #     'model__l1_ratio': np.arange(0.1, 1, 0.1)
-        # },
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # SVM works by finding a hyperplane in a high-dimensional space that best separates data into different
-        #     # classes. It aims to maximize the margin (the distance between the hyperplane and the nearest data points
-        #     # of each class) while minimizing classification errors.
-        #     # SVR extends Support Vector Machines (SVM) into regression problems, allowing for the prediction of
-        #     # continuous outcomes rather than classifying data into discrete categories as with a classifier.
-        #     'model': [SVR(cache_size=500)],
-        #     'model__C': [0.1, 1, 10, 100, 1000], 'model__gamma': [0.001, 0.0001],
-        #     'model__epsilon': [0.001, 0.01, 0.1, 1]
-        # },
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # The decision tree uses a tree structure. Starting from tree root, branching according to the conditions
-        #     # and heading toward the leaves, the goal leaf is the prediction result. This decision tree has the
-        #     # disadvantage of overfitting test data if the hierarchy is too deep. As a means to prevent this
-        #     # overfitting, the idea of the ensemble method is used for decision trees. This technique uses a
-        #     # combination of multiple decision trees rather than simply a single decision tree.
-        #     #
-        #     # Random forests create multiple decision trees by splitting a dataset based on random numbers.
-        #     # It prevents overfitting by making predictions for all individual decision trees and
-        #     # averaging the regression results.
-        #     # 'model': [RandomForestRegressor(n_estimators=10)],
-        #     # 'model__max_depth': [7], 'model__max_features': [9],
-        #     'model': [RandomForestRegressor(n_estimators=300)],
-        #     'model__max_depth': range(2, 8), 'model__max_features': range(2, 10)
-        # },
+        {
+            **data_transformers_parameters_grid,
+
+            # The Least Absolute Shrinkage and Selection Operator is abbreviated as “LASSO.” Lasso regression is a type
+            # of regularisation. It is preferred over regression methods for more precise prediction. This model makes
+            # use of shrinkage which is the process by which data values are shrunk towards a central point known as
+            # the mean. L1 regularisation is used in Lasso Regression. It is used when there are many features because
+            # it performs feature selection automatically. The main purpose of Lasso Regression is to find the
+            # coefficients that minimize the error sum of squares by applying a penalty to these coefficients.
+            'model': [Lasso()],
+            # 'model__alpha': [0.2],
+            'model__alpha': np.arange(0.01, 1.0, 0.01),
+        },
+        {
+            **data_transformers_parameters_grid,
+
+            # Similar to the LASSO regression, ridge regression puts a similar constraint on the coefficients by
+            # introducing a penalty factor. However, while lasso regression takes the magnitude of the coefficients,
+            # ridge regression takes the square.
+            'model': [Ridge()],
+            'model__alpha': np.arange(1, 100.0, 1),
+        },
+        {
+            **data_transformers_parameters_grid,
+
+            # The elastic net is a regularized regression method that linearly combines the L1 and L2 penalties
+            # of the lasso and ridge methods.
+            'model': [ElasticNet()],
+            'model__alpha': [1e-2, 1e-1, 1.0, 10.0],
+            'model__l1_ratio': np.arange(0.1, 1, 0.1)
+        },
+        {
+            **data_transformers_parameters_grid,
+
+            # SVM works by finding a hyperplane in a high-dimensional space that best separates data into different
+            # classes. It aims to maximize the margin (the distance between the hyperplane and the nearest data points
+            # of each class) while minimizing classification errors.
+            # SVR extends Support Vector Machines (SVM) into regression problems, allowing for the prediction of
+            # continuous outcomes rather than classifying data into discrete categories as with a classifier.
+            'model': [SVR(cache_size=500)],
+            'model__C': [0.1, 1, 10, 100, 1000], 'model__gamma': [0.001, 0.0001],
+            'model__epsilon': [0.001, 0.01, 0.1, 1]
+        },
+        {
+            **data_transformers_parameters_grid,
+
+            # The decision tree uses a tree structure. Starting from tree root, branching according to the conditions
+            # and heading toward the leaves, the goal leaf is the prediction result. This decision tree has the
+            # disadvantage of overfitting test data if the hierarchy is too deep. As a means to prevent this
+            # overfitting, the idea of the ensemble method is used for decision trees. This technique uses a
+            # combination of multiple decision trees rather than simply a single decision tree.
+            #
+            # Random forests create multiple decision trees by splitting a dataset based on random numbers.
+            # It prevents overfitting by making predictions for all individual decision trees and
+            # averaging the regression results.
+            # 'model': [RandomForestRegressor(n_estimators=10)],
+            # 'model__max_depth': [7], 'model__max_features': [9],
+            'model': [RandomForestRegressor(n_estimators=300)],
+            'model__max_depth': range(2, 8), 'model__max_features': range(2, 10)
+        },
         {
             **data_transformers_parameters_grid,
 
@@ -248,17 +248,17 @@ def get_models_and_their_hyperparameters():
             'model': [GradientBoostingRegressor(n_estimators=300)],
             'model__max_depth': range(2, 8), 'model__max_features': range(2, 11)
         },
-        # {
-        #     **data_transformers_parameters_grid,
-        #
-        #     # XGBoost ('eXtreme Gradient Boosting') and sklearn's GradientBoost are fundamentally the same as they are
-        #     # both gradient boosting implementations. XGBoost is a lot faster than sklearn's. XGBoost is quite
-        #     # memory-efficient and can be parallelized. # Having used both, XGBoost's speed is quite impressive and
-        #     # its performance is superior to sklearn's GradientBoosting.
-        #     # https://xgboost.readthedocs.io/en/stable/tutorials/model.html
-        #     'model': [xgboost.XGBRegressor(tree_method="hist", n_estimators=300)],
-        #     'model__max_depth': range(2, 11)
-        # }
+        {
+            **data_transformers_parameters_grid,
+
+            # XGBoost ('eXtreme Gradient Boosting') and sklearn's GradientBoost are fundamentally the same as they are
+            # both gradient boosting implementations. XGBoost is a lot faster than sklearn's. XGBoost is quite
+            # memory-efficient and can be parallelized. # Having used both, XGBoost's speed is quite impressive and
+            # its performance is superior to sklearn's GradientBoosting.
+            # https://xgboost.readthedocs.io/en/stable/tutorials/model.html
+            'model': [xgboost.XGBRegressor(tree_method="hist", n_estimators=300)],
+            'model__max_depth': range(2, 11)
+        }
     ]
 
 
